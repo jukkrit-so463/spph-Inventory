@@ -5,7 +5,7 @@
 
 // 🔧 เปลี่ยน URL นี้เป็น Web App URL ของคุณหลัง deploy Google Apps Script
 //    (ดูวิธีใน README.md หัวข้อ "การ Deploy")
-var APPS_SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0jaD3WruNWahviXUwlPUgo3OuM5xK1bY4TPMbRUi-ujLZVQhCrWlL1cGKx0_ex40nFg/exec';
 
 /**
  * เรียก API ฝั่ง server ผ่าน POST (ปลอดภัย)
