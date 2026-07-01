@@ -232,9 +232,29 @@ function doLogin() {
     btn.disabled = false; btn.innerHTML = '<i class="fi fi-rr-sign-in"></i> เข้าสู่ระบบ';
     if (res.success) { AUTH.set(res.token, res.user); initApp(); }
     else { showError(res.message); }
-  }).catch(function () {
+  }).catch(function (err) {
     btn.disabled = false; btn.innerHTML = '<i class="fi fi-rr-sign-in"></i> เข้าสู่ระบบ';
-    showError('ไม่สามารถเชื่อมต่อระบบได้');
+    // แสดงข้อความ error ที่ละเอียด เพื่อช่วย debug
+    var msg = err && err.message ? err.message : String(err || 'ไม่ทราบสาเหตุ');
+    var hint = '';
+    if (msg.indexOf('Failed to fetch') !== -1 || msg.indexOf('NetworkError') !== -1 || msg === 'TypeError: Failed to fetch') {
+      msg = 'เชื่อมต่อกับ server ไม่ได้';
+      hint = '\n\nตรวจสอบ:\n1) APPS_SCRIPT_URL ใน api.js ถูกไหม\n2) Deploy เป็น Web App แล้ว (Execute as: Me, Access: Anyone)\n3) คัดลอก URL จาก Deploy ใหม่ล่าสุด (อย่าใช้ URL เก่า)';
+    } else if (msg.indexOf('HTTP 405') !== -1) {
+      msg = 'Server ไม่รับ POST';
+      hint = '\n\nตรวจ: deploy เป็น Web App แล้วหรือยัง? (ถ้า deploy เป็น API executable จะไม่รับ POST)';
+    } else if (msg.indexOf('HTTP 401') !== -1 || msg.indexOf('HTTP 403') !== -1) {
+      msg = 'ไม่มีสิทธิ์เข้าถึง';
+      hint = '\n\nตรวจ: Who has access = "Anyone" ในการ deploy';
+    } else if (msg.indexOf('HTTP 404') !== -1) {
+      msg = 'ไม่พบ URL';
+      hint = '\n\nตรวจ: APPS_SCRIPT_URL ถูกต้องไหม (ต้องลงท้ายด้วย /exec)';
+    } else if (msg.indexOf('Non-JSON') !== -1 || msg.indexOf('ไม่ใช่ JSON') !== -1) {
+      hint = '\n\nตรวจ: รันฟังก์ชัน setup() ใน Apps Script แล้วหรือยัง?';
+    } else if (msg.indexOf('NO_URL') !== -1 || msg.indexOf('ยังไม่ได้ตั้งค่า') !== -1) {
+      hint = '\n\nแก้ api.js บรรทัดที่ 8: เปลี่ยน PASTE_YOUR_... เป็น Web App URL';
+    }
+    showError(msg + hint);
   });
 }
 
