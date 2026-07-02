@@ -162,11 +162,14 @@ function showMainShell() {
   document.getElementById('sidebarRole').textContent = ROLE_LABELS[AUTH.user.role] || AUTH.user.role;
   // ซ่อนเมนูตาม role
   var isAdmin = AUTH.user.role === 'admin';
-  var notEmp = AUTH.user.role !== 'employee';
+  var isEmp = AUTH.user.role === 'employee';
+  var notEmp = !isEmp;
   document.getElementById('menuItems').style.display = isAdmin ? '' : 'none';
   document.getElementById('menuReceive').style.display = notEmp ? '' : 'none';
   document.getElementById('menuStocktake').style.display = notEmp ? '' : 'none';
   document.getElementById('menuInventorySection').style.display = notEmp ? '' : 'none';
+  document.getElementById('menuUsage').style.display = isEmp ? '' : 'none';
+  document.getElementById('menuWithdraw').style.display = isEmp ? '' : 'none';
   document.getElementById('menuApprove').style.display = isAdmin ? '' : 'none';
   document.getElementById('menuAdminSection').style.display = isAdmin ? '' : 'none';
   document.getElementById('menuReportSection').style.display = notEmp ? '' : 'none';
