@@ -32,6 +32,7 @@ var AUTH = {
 var _itemsData = [];
 var _itemsCacheTime = 0;
 var _wdData = [];
+var _usageData = [];
 var _receiveData = [];
 var _txData = [];
 var _usersData = [];
@@ -117,6 +118,12 @@ function paginate(arr, page, perPage) {
   var start = (page - 1) * perPage;
   return arr.slice(start, start + perPage);
 }
+function _formatNumber(n) {
+  if (n === null || n === undefined) return '0';
+  n = Number(n);
+  if (isNaN(n)) return '0';
+  return n.toLocaleString('th-TH');
+}
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', function () {
@@ -196,7 +203,7 @@ function updateClock() {
 function refreshPage() {
   var icon = document.getElementById('refreshIcon');
   if (icon) { icon.style.transition = 'transform 0.6s'; icon.style.transform = 'rotate(360deg)'; setTimeout(function () { icon.style.transform = ''; }, 650); }
-  _itemsData = []; _itemsCacheTime = 0; _wdData = []; _receiveData = []; _txData = []; _usersData = [];
+  _itemsData = []; _itemsCacheTime = 0; _wdData = []; _usageData = []; _receiveData = []; _txData = []; _usersData = [];
   if (_currentPage) loadPage(_currentPage);
 }
 
@@ -286,7 +293,7 @@ function loadPage(page) {
   });
   var titles = {
     dashboard: 'ภาพรวมระบบ', stock: 'สต็อกคงเหลือ', items: 'รายการวัสดุ',
-    receive: 'รับวัสดุเข้าคลัง', stocktake: 'นับสต็อก', withdraw: 'เบิกวัสดุ', approve: 'อนุมัติการเบิก',
+    receive: 'รับวัสดุเข้าคลัง', stocktake: 'นับสต็อก', usage: 'บันทึกการใช้จริง', withdraw: 'เบิกวัสดุ', approve: 'อนุมัติการเบิก',
     transactions: 'ประวัติเคลื่อนไหว', reports: 'รายงาน', users: 'จัดการผู้ใช้งาน', settings: 'ตั้งค่าระบบ', profile: 'โปรไฟล์'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
@@ -301,6 +308,7 @@ function loadPage(page) {
   else if (page === 'items') renderItems();
   else if (page === 'receive') renderReceive();
   else if (page === 'stocktake') renderStocktake();
+  else if (page === 'usage') renderUsage();
   else if (page === 'withdraw') renderWithdraw();
   else if (page === 'approve') renderApprove();
   else if (page === 'transactions') renderTransactions();
@@ -372,9 +380,11 @@ function renderDashboard() {
     var html = '<div class="fade-in space-y-5">';
 
     // KPI cards
-    html += '<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">';
+    html += '<div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">';
     html += _kpiCard('รายการวัสดุ', kpi.total_items, 'fi-rr-box-open-full', 'bg-navy-100 text-navy-700');
     html += _kpiCard('สต็อกรวม', kpi.total_stock, 'fi-rr-layers', 'bg-blue-100 text-blue-700');
+    html += _kpiCard('มูลค่าสต็อก', _formatNumber(kpi.total_stock_value), 'fi-rr-money', 'bg-emerald-100 text-emerald-700');
+    html += _kpiCard('ใช้วันนี้', kpi.total_usage_today, 'fi-rr-arrow-right-from-bracket', 'bg-purple-100 text-purple-700');
     html += _kpiCard('รออนุมัติ', kpi.pending, 'fi-rr-clock', 'bg-amber-100 text-amber-700');
     html += _kpiCard('อนุมัติแล้ว', kpi.approved, 'fi-rr-check-circle', 'bg-green-100 text-green-700');
     html += _kpiCard('สต็อกต่ำ', kpi.low_stock, 'fi-rr-triangle-warning', 'bg-red-100 text-red-700');
@@ -383,7 +393,7 @@ function renderDashboard() {
 
     // Charts row
     html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">';
-    html += '<div class="card p-5"><h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fi fi-rr-chart-column text-navy-600"></i> สถิติรับ-เบิก 6 เดือนล่าสุด</h3><div style="height:240px"><canvas id="chartMonthly"></canvas></div></div>';
+    html += '<div class="card p-5"><h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fi fi-rr-chart-column text-navy-600"></i> สถิติรับ-ใช้-เบิก 6 เดือนล่าสุด</h3><div style="height:240px"><canvas id="chartMonthly"></canvas></div></div>';
     html += '<div class="card p-5"><h3 class="font-semibold text-gray-700 mb-3 flex items-center gap-2"><i class="fi fi-rr-chart-pie text-navy-600"></i> สัดส่วนวัสดุตามหมวดหมู่</h3><div style="height:240px"><canvas id="chartCategory"></canvas></div></div>';
     html += '</div>';
 
@@ -427,6 +437,7 @@ function renderDashboard() {
         type: 'bar',
         data: { labels: d.monthly.map(function (m) { return m.month; }), datasets: [
           { label: 'รับเข้า', data: d.monthly.map(function (m) { return m.receive; }), backgroundColor: '#10b981' },
+          { label: 'ใช้จริง', data: d.monthly.map(function (m) { return m.usage || 0; }), backgroundColor: '#8b5cf6' },
           { label: 'เบิกออก', data: d.monthly.map(function (m) { return m.withdraw; }), backgroundColor: '#ef4444' }
         ]},
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
@@ -460,11 +471,13 @@ function renderStock() {
     if (!res.success) { showError(res.message); return; }
     var items = _itemsData;
     var html = '<div class="fade-in space-y-4">';
-    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">รหัส</th><th class="px-4 py-3 text-left">ชื่อวัสดุ</th><th class="px-4 py-3 text-left">หน่วย</th><th class="px-4 py-3 text-left">หมวดหมู่</th><th class="px-4 py-3 text-center">คงเหลือ</th><th class="px-4 py-3 text-center">ขั้นต่ำ</th><th class="px-4 py-3 text-center">สถานะ</th></tr></thead><tbody>';
-    if (!items.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ไม่มีวัสดุ</td></tr>';
+    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">รหัส</th><th class="px-4 py-3 text-left">ชื่อวัสดุ</th><th class="px-4 py-3 text-left">หน่วย</th><th class="px-4 py-3 text-right">ราคา/หน่วย</th><th class="px-4 py-3 text-center">คงเหลือ</th><th class="px-4 py-3 text-right">มูลค่ารวม</th><th class="px-4 py-3 text-center">ขั้นต่ำ</th><th class="px-4 py-3 text-center">สถานะ</th></tr></thead><tbody>';
+    if (!items.length) html += '<tr><td colspan="8" class="text-center py-10 text-gray-400">ไม่มีวัสดุ</td></tr>';
     items.forEach(function (i) {
       var sClass = getStockClass(i.current_stock, i.min_stock); var sLabel = getStockLabel(i.current_stock, i.min_stock);
-      html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(i.item_code) + '</td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(i.name) + (i.size ? ' <span class="text-xs text-gray-400">(' + escHtml(i.size) + ')</span>' : '') + '</td><td class="px-4 py-3 text-gray-600 text-xs">' + escHtml(i.unit) + '</td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(i.category || '-') + '</td><td class="px-4 py-3 text-center font-bold text-gray-800">' + i.current_stock + '</td><td class="px-4 py-3 text-center text-gray-500 text-xs">' + i.min_stock + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + sClass + '">' + sLabel + '</span></td></tr>';
+      var price = Number(i.price || 0);
+      var value = price * i.current_stock;
+      html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(i.item_code) + '</td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(i.name) + (i.size ? ' <span class="text-xs text-gray-400">(' + escHtml(i.size) + ')</span>' : '') + '</td><td class="px-4 py-3 text-gray-600 text-xs">' + escHtml(i.unit) + '</td><td class="px-4 py-3 text-right text-gray-600 text-xs">' + (price > 0 ? _formatNumber(price) : '-') + '</td><td class="px-4 py-3 text-center font-bold text-gray-800">' + i.current_stock + '</td><td class="px-4 py-3 text-right text-sm font-semibold text-gray-700">' + (value > 0 ? _formatNumber(value) : '-') + '</td><td class="px-4 py-3 text-center text-gray-500 text-xs">' + i.min_stock + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + sClass + '">' + sLabel + '</span></td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     document.getElementById('mainContent').innerHTML = html;
@@ -547,7 +560,9 @@ function showItemDetail(id) {
   html += '<div class="grid grid-cols-2 gap-3 text-sm">';
   html += _detailRow('รหัส', item.item_code); html += _detailRow('หมวดหมู่', item.category || '-');
   html += _detailRow('หน่วย', item.unit); html += _detailRow('ขนาด', item.size || '-');
+  html += _detailRow('ราคา/หน่วย', Number(item.price || 0) > 0 ? _formatNumber(item.price) + ' บาท' : '-');
   html += _detailRow('คงเหลือ', item.current_stock + ' ' + (item.unit || '')); html += _detailRow('ขั้นต่ำ', item.min_stock);
+  if (Number(item.price || 0) > 0) html += _detailRow('มูลค่ารวม', _formatNumber(Number(item.price) * item.current_stock) + ' บาท');
   html += _detailRow('สถานะ', '<span class="px-2 py-0.5 rounded-full text-xs ' + sClass + '">' + sLabel + '</span>');
   html += '</div></div>';
   var footer = '<button onclick="closeModal()" class="btn-secondary">ปิด</button>';
@@ -565,6 +580,7 @@ function _openItemForm(item) {
     + fieldHTML('ขนาด', 'iSize', 'text', item.size || '')
     + fieldHTML('หน่วย *', 'iUnit', 'text', item.unit || '')
     + fieldHTML('หมวดหมู่', 'iCategory', 'text', item.category || 'ทั่วไป')
+    + fieldHTML('ราคา/หน่วย (บาท)', 'iPrice', 'number', item.price || 0)
     + fieldHTML('สต็อกปัจจุบัน', 'iStock', 'number', item.current_stock || 0)
     + fieldHTML('สต็อกขั้นต่ำ', 'iMin', 'number', item.min_stock || 5)
     + '</div>';
@@ -578,6 +594,7 @@ function submitItem(id) {
     size: (document.getElementById('iSize') || {}).value || '',
     unit: (document.getElementById('iUnit') || {}).value || '',
     category: (document.getElementById('iCategory') || {}).value || 'ทั่วไป',
+    price: parseFloat((document.getElementById('iPrice') || {}).value) || 0,
     current_stock: parseInt((document.getElementById('iStock') || {}).value) || 0,
     min_stock: parseInt((document.getElementById('iMin') || {}).value) || 5
   };
@@ -638,6 +655,89 @@ function submitReceive() {
   showLoading('กำลังบันทึก...');
   callAPI('addReceive', data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); _itemsData = []; _itemsCacheTime = 0; renderReceive(); } else showError(res.message); })
     .catch(function (e) { hideLoading(); showError(e.message); });
+}
+
+// ===== USAGE (บันทึกการใช้จริง) =====
+function renderUsage() {
+  showLoading('โหลดข้อมูลการใช้จริง...');
+  Promise.all([_ensureItems(), callAPI('getUsages', {})]).then(function (results) {
+    hideLoading();
+    var usageRes = results[1];
+    if (!usageRes.success) { showError(usageRes.message); return; }
+    _usageData = usageRes.data || [];
+    var html = '<div class="fade-in space-y-4">';
+    html += '<div class="flex items-center justify-between flex-wrap gap-3">';
+    html += '<div><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-arrow-right-from-bracket text-navy-600"></i> บันทึกการใช้จริง</h3><p class="text-xs text-gray-400 mt-1">ตัดยอดสต็อกทันที ไม่ต้องรออนุมัติ</p></div>';
+    html += '<button onclick="openUsageModal()" class="btn-primary"><i class="fi fi-rr-plus"></i> บันทึกการใช้</button></div>';
+
+    // Summary cards
+    var totalUsed = _usageData.reduce(function (s, u) { return s + Number(u.quantity || 0); }, 0);
+    var totalValue = _usageData.reduce(function (s, u) { return s + (Number(u.price || 0) * Number(u.quantity || 0)); }, 0);
+    html += '<div class="grid grid-cols-2 md:grid-cols-2 gap-3">';
+    html += '<div class="card p-4 text-center"><p class="text-xs text-gray-500">จำนวนรายการ</p><p class="text-2xl font-bold text-gray-800 mt-1">' + _usageData.length + '</p></div>';
+    html += '<div class="card p-4 text-center"><p class="text-xs text-gray-500">มูลค่ารวม</p><p class="text-2xl font-bold text-emerald-600 mt-1">' + _formatNumber(totalValue) + '</p><p class="text-xs text-gray-400">บาท</p></div>';
+    html += '</div>';
+
+    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">เลขที่</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-right">มูลค่า</th><th class="px-4 py-3 text-left">ผู้บันทึก</th><th class="px-4 py-3 text-left">วัตถุประสงค์</th><th class="px-4 py-3 text-left">วันที่</th></tr></thead><tbody>';
+    if (!_usageData.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ยังไม่มีรายการใช้จริง</td></tr>';
+    _usageData.slice(0, 100).forEach(function (u) {
+      var value = Number(u.price || 0) * Number(u.quantity || 0);
+      html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(u.usage_no || '-') + '</td>';
+      html += '<td class="px-4 py-3 font-medium text-gray-800">' + escHtml(u.item_name || u.item_id) + (u.unit ? ' <span class="text-xs text-gray-400">(' + escHtml(u.unit) + ')</span>' : '') + '</td>';
+      html += '<td class="px-4 py-3 text-center font-bold text-purple-700">-' + u.quantity + '</td>';
+      html += '<td class="px-4 py-3 text-right text-sm ' + (value > 0 ? 'text-gray-700' : 'text-gray-400') + '">' + (value > 0 ? _formatNumber(value) + ' บาท' : '-') + '</td>';
+      html += '<td class="px-4 py-3 text-xs text-gray-600">' + escHtml(u.user_name || u.username) + '</td>';
+      html += '<td class="px-4 py-3 text-xs text-gray-500">' + escHtml(u.purpose || '-') + '</td>';
+      html += '<td class="px-4 py-3 text-xs text-gray-400">' + formatDateTime(u.created_at) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div></div>';
+    document.getElementById('mainContent').innerHTML = html;
+  }).catch(function (e) { hideLoading(); showError(e.message); });
+}
+function openUsageModal() {
+  var opts = _itemsData.filter(function (i) { return i.current_stock > 0; }).map(function (i) {
+    var priceInfo = Number(i.price || 0) > 0 ? ' | ' + _formatNumber(i.price) + ' บาท/' + escHtml(i.unit) : '';
+    return '<option value="' + i.id + '">' + escHtml(i.name) + ' (คงเหลือ ' + i.current_stock + ' ' + escHtml(i.unit) + priceInfo + ')</option>';
+  }).join('');
+  var body = '<div class="space-y-4">'
+    + '<div class="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-purple-700"><i class="fi fi-rr-info mr-1"></i> การบันทึกนี้จะตัดยอดสต็อกทันที โดยไม่ต้องรออนุมัติ</div>'
+    + '<div><label class="form-label">วัสดุ *</label><select id="uItem" class="form-input" onchange="updateUsagePreview()"><option value="">เลือกวัสดุ</option>' + opts + '</select></div>'
+    + '<div><label class="form-label">จำนวน *</label><input type="number" id="uQty" min="1" class="form-input" value="1" oninput="updateUsagePreview()"></div>'
+    + '<div id="usagePreview"></div>'
+    + '<div><label class="form-label">วัตถุประสงค์</label><input type="text" id="uPurpose" class="form-input" placeholder="เช่น ใช้ในงานซ่อม..."></div>'
+    + '<div><label class="form-label">หมายเหตุ</label><textarea id="uNote" class="form-input" rows="2"></textarea></div></div>';
+  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button><button onclick="submitUsage()" class="btn-primary" style="background:#7c3aed"><i class="fi fi-rr-check mr-1"></i>บันทึก (ตัดยอด)</button>';
+  openModal('บันทึกการใช้จริง', body, footer);
+}
+function updateUsagePreview() {
+  var itemId = (document.getElementById('uItem') || {}).value;
+  var qty = parseInt((document.getElementById('uQty') || {}).value) || 0;
+  var previewEl = document.getElementById('usagePreview');
+  if (!previewEl || !itemId || qty <= 0) { if (previewEl) previewEl.innerHTML = ''; return; }
+  var item = _itemsData.filter(function (i) { return i.id === itemId; })[0];
+  if (!item) return;
+  var price = Number(item.price || 0);
+  var value = price * qty;
+  var html = '<div class="bg-gray-50 rounded-xl p-3 text-sm text-gray-700">';
+  html += '<span class="text-gray-500">คงเหลือหลังตัดยอด:</span> <strong>' + (item.current_stock - qty) + ' ' + escHtml(item.unit) + '</strong>';
+  if (value > 0) html += ' | <span class="text-gray-500">มูลค่าที่ตัด:</span> <strong class="text-red-600">' + _formatNumber(value) + ' บาท</strong>';
+  html += '</div>';
+  previewEl.innerHTML = html;
+}
+function submitUsage() {
+  var data = {
+    item_id: (document.getElementById('uItem') || {}).value,
+    quantity: parseInt((document.getElementById('uQty') || {}).value),
+    purpose: (document.getElementById('uPurpose') || {}).value,
+    note: (document.getElementById('uNote') || {}).value
+  };
+  if (!data.item_id || !data.quantity || data.quantity <= 0) { showError('กรุณาเลือกวัสดุและใส่จำนวน'); return; }
+  showLoading('กำลังบันทึกการใช้จริง...');
+  callAPI('addUsage', data).then(function (res) {
+    hideLoading();
+    if (res.success) { closeModal(); showSuccess(res.message); _itemsData = []; _itemsCacheTime = 0; renderUsage(); }
+    else showError(res.message);
+  }).catch(function (e) { hideLoading(); showError(e.message); });
 }
 
 // ===== STOCKTAKE =====
@@ -772,9 +872,9 @@ function renderTransactions() {
     html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">วันที่</th><th class="px-4 py-3 text-left">ประเภท</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-left">โดย</th><th class="px-4 py-3 text-left">หมายเหตุ</th></tr></thead><tbody>';
     if (!txs.length) html += '<tr><td colspan="6" class="text-center py-10 text-gray-400">ยังไม่มีประวัติ</td></tr>';
     txs.slice(0, 100).forEach(function (t) {
-      var typeMap = { receive: ['รับเข้า', 'text-green-700', 'fi-rr-inbox-in'], withdraw: ['เบิกออก', 'text-red-700', 'fi-rr-inbox-out'], withdraw_request: ['ขอเบิก', 'text-amber-700', 'fi-rr-clock'], create: ['สร้าง', 'text-blue-700', 'fi-rr-plus'], stocktake: ['นับสต็อก', 'text-purple-700', 'fi-rr-clipboard-list'] };
+      var typeMap = { receive: ['รับเข้า', 'text-green-700', 'fi-rr-inbox-in'], withdraw: ['เบิกออก', 'text-red-700', 'fi-rr-inbox-out'], usage: ['ใช้จริง', 'text-purple-700', 'fi-rr-arrow-right-from-bracket'], withdraw_request: ['ขอเบิก', 'text-amber-700', 'fi-rr-clock'], create: ['สร้าง', 'text-blue-700', 'fi-rr-plus'], stocktake: ['นับสต็อก', 'text-indigo-700', 'fi-rr-clipboard-list'] };
       var tp = typeMap[t.type] || [t.type, 'text-gray-700', 'fi-rr-dot-circle'];
-      html += '<tr><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(t.created_at) + '</td><td class="px-4 py-3"><span class="' + tp[1] + ' text-xs font-medium"><i class="fi ' + tp[2] + ' mr-1"></i>' + tp[0] + '</span></td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(t.item_name) + '</td><td class="px-4 py-3 text-center font-bold ' + tp[1] + '">' + (t.quantity > 0 ? (t.type === 'receive' ? '+' : (t.type === 'withdraw' ? '-' : '')) + t.quantity : '-') + '</td><td class="px-4 py-3 text-xs text-gray-600">' + escHtml(t.username) + '</td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(t.note || '-') + '</td></tr>';
+      html += '<tr><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(t.created_at) + '</td><td class="px-4 py-3"><span class="' + tp[1] + ' text-xs font-medium"><i class="fi ' + tp[2] + ' mr-1"></i>' + tp[0] + '</span></td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(t.item_name) + '</td><td class="px-4 py-3 text-center font-bold ' + tp[1] + '">' + (t.quantity > 0 ? (t.type === 'receive' ? '+' : (t.type === 'withdraw' || t.type === 'usage' ? '-' : '')) + t.quantity : '-') + '</td><td class="px-4 py-3 text-xs text-gray-600">' + escHtml(t.username) + '</td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(t.note || '-') + '</td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     document.getElementById('mainContent').innerHTML = html;
@@ -790,24 +890,28 @@ function renderReports() {
     var recs = results[2].data || [];
     var totalIn = recs.reduce(function (s, r) { return s + Number(r.quantity || 0); }, 0);
     var totalOut = wds.reduce(function (s, w) { return s + Number(w.quantity || 0); }, 0);
+    var totalStockValue = _itemsData.reduce(function (s, i) { return s + (Number(i.price || 0) * Number(i.current_stock || 0)); }, 0);
     var html = '<div class="fade-in space-y-4">';
-    html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+    html += '<div class="grid grid-cols-1 md:grid-cols-4 gap-4">';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-inbox-in text-3xl text-green-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + totalIn + '</p><p class="text-xs text-gray-500">รับเข้ารวม</p></div>';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-inbox-out text-3xl text-red-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + totalOut + '</p><p class="text-xs text-gray-500">เบิกออกรวม</p></div>';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-layers text-3xl text-navy-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + _itemsData.reduce(function (s, i) { return s + Number(i.current_stock || 0); }, 0) + '</p><p class="text-xs text-gray-500">สต็อกปัจจุบัน</p></div>';
+    html += '<div class="card p-5 text-center"><i class="fi fi-rr-money text-3xl text-emerald-600"></i><p class="text-2xl font-bold text-emerald-700 mt-2">' + _formatNumber(totalStockValue) + '</p><p class="text-xs text-gray-500">มูลค่าสต็อกรวม (บาท)</p></div>';
     html += '</div>';
     html += '<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-gray-700">รายงานสต็อกคงเหลือ</h3><button onclick="exportItemsExcel()" class="btn-secondary btn-sm"><i class="fi fi-rr-file-export"></i> Export Excel</button></div>';
-    html += '<div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-3 py-2 text-left">รหัส</th><th class="px-3 py-2 text-left">ชื่อ</th><th class="px-3 py-2 text-center">คงเหลือ</th><th class="px-3 py-2 text-center">ขั้นต่ำ</th><th class="px-3 py-2 text-center">สถานะ</th></tr></thead><tbody>';
+    html += '<div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-3 py-2 text-left">รหัส</th><th class="px-3 py-2 text-left">ชื่อ</th><th class="px-3 py-2 text-right">ราคา/หน่วย</th><th class="px-3 py-2 text-center">คงเหลือ</th><th class="px-3 py-2 text-right">มูลค่ารวม</th><th class="px-3 py-2 text-center">ขั้นต่ำ</th><th class="px-3 py-2 text-center">สถานะ</th></tr></thead><tbody>';
     _itemsData.forEach(function (i) {
       var sClass = getStockClass(i.current_stock, i.min_stock); var sLabel = getStockLabel(i.current_stock, i.min_stock);
-      html += '<tr><td class="px-3 py-2 text-xs font-mono">' + escHtml(i.item_code) + '</td><td class="px-3 py-2">' + escHtml(i.name) + '</td><td class="px-3 py-2 text-center">' + i.current_stock + ' ' + escHtml(i.unit) + '</td><td class="px-3 py-2 text-center">' + i.min_stock + '</td><td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + sClass + '">' + sLabel + '</span></td></tr>';
+      var price = Number(i.price || 0);
+      var value = price * i.current_stock;
+      html += '<tr><td class="px-3 py-2 text-xs font-mono">' + escHtml(i.item_code) + '</td><td class="px-3 py-2">' + escHtml(i.name) + '</td><td class="px-3 py-2 text-right">' + (price > 0 ? _formatNumber(price) : '-') + '</td><td class="px-3 py-2 text-center">' + i.current_stock + ' ' + escHtml(i.unit) + '</td><td class="px-3 py-2 text-right font-medium">' + (value > 0 ? _formatNumber(value) : '-') + '</td><td class="px-3 py-2 text-center">' + i.min_stock + '</td><td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + sClass + '">' + sLabel + '</span></td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     document.getElementById('mainContent').innerHTML = html;
   }).catch(function (e) { hideLoading(); showError(e.message); });
 }
 function exportItemsExcel() {
-  var data = _itemsData.map(function (i) { return { 'รหัส': i.item_code, 'ชื่อ': i.name, 'ขนาด': i.size, 'หน่วย': i.unit, 'หมวดหมู่': i.category, 'คงเหลือ': i.current_stock, 'ขั้นต่ำ': i.min_stock }; });
+  var data = _itemsData.map(function (i) { return { 'รหัส': i.item_code, 'ชื่อ': i.name, 'ขนาด': i.size, 'หน่วย': i.unit, 'หมวดหมู่': i.category, 'ราคา/หน่วย (บาท)': Number(i.price || 0), 'คงเหลือ': i.current_stock, 'มูลค่ารวม (บาท)': Number(i.price || 0) * i.current_stock, 'ขั้นต่ำ': i.min_stock }; });
   var ws = XLSX.utils.json_to_sheet(data);
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'สต็อก');
   XLSX.writeFile(wb, 'รายงานสต็อก_' + new Date().toISOString().slice(0, 10) + '.xlsx');

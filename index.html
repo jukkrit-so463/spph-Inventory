@@ -91,7 +91,7 @@
       </div>
     </div>
 
-    <p class="text-center text-indigo-200 text-xs mt-6">v2.0 Secure Edition &copy; <span id="loginYear"></span></p>
+    <p class="text-center text-indigo-200 text-xs mt-6">v2.1 Secure Edition &copy; <span id="loginYear"></span></p>
   </div>
 </div>
 
@@ -130,6 +130,7 @@
 
       <p class="text-indigo-400 text-xs font-semibold px-3 mb-1 uppercase tracking-wider">การเบิก</p>
       <ul class="space-y-0.5 mb-3">
+        <li><button onclick="loadPage('usage')" data-page="usage" class="menu-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-navy-700 transition text-indigo-100"><i class="fi fi-rr-arrow-right-from-bracket w-4 text-center text-base"></i><span>ใช้จริง</span></button></li>
         <li><button onclick="loadPage('withdraw')" data-page="withdraw" class="menu-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-navy-700 transition text-indigo-100"><i class="fi fi-rr-inbox-out w-4 text-center text-base"></i><span>เบิกวัสดุ</span></button></li>
         <li id="menuApprove"><button onclick="loadPage('approve')" data-page="approve" class="menu-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-navy-700 transition text-indigo-100"><i class="fi fi-rr-check-circle w-4 text-center text-base"></i><span>อนุมัติการเบิก</span><span id="pendingBadge" class="hidden ml-auto bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">0</span></button></li>
         <li><button onclick="loadPage('transactions')" data-page="transactions" class="menu-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm hover:bg-navy-700 transition text-indigo-100"><i class="fi fi-rr-time-past w-4 text-center text-base"></i><span>ประวัติเคลื่อนไหว</span></button></li>
@@ -197,7 +198,7 @@
     <div id="mainContent" class="flex-1 p-4 lg:p-6"></div>
 
     <footer class="mt-auto bg-navy-800 text-indigo-200 text-center text-xs py-3 px-4">
-      ระบบวัสดุสิ้นเปลือง (Secure Edition v2.0) — ขับเคลื่อนด้วย Google Apps Script + Google Sheets
+      ระบบวัสดุสิ้นเปลือง (Secure Edition v2.1) — ขับเคลื่อนด้วย Google Apps Script + Google Sheets
     </footer>
   </main>
 </div>
