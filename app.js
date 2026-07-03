@@ -145,7 +145,7 @@ function initApp() {
   callAPI('validateSession').then(function (session) {
     hideLoading();
     if (!session) { AUTH.clear(); showLoginPage(); return; }
-    AUTH.user = { id: session.user_id, username: session.username, role: session.role, name: session.name };
+    AUTH.user = { id: session.user_id, username: session.username, role: session.role, name: session.name, department_id: session.department_id || '', department_name: session.department_name || '' };
     sessionStorage.setItem('sup_user', JSON.stringify(AUTH.user));
     showMainShell();
     loadPage('dashboard');
@@ -1026,11 +1026,10 @@ function buildDepartmentsPage() {
   html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">ชื่อหน่วยงาน</th><th class="px-4 py-3 text-left">รายละเอียด</th><th class="px-4 py-3 text-center">จำนวนพนักงาน</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
   if (!paged.length) html += '<tr><td colspan="5" class="text-center py-10 text-gray-400">ยังไม่มีหน่วยงาน</td></tr>';
   paged.forEach(function (d) {
-    var empCount = (_usersData || []).filter(function (u) { return u.department_id === d.id; }).length;
     html += '<tr>';
     html += '<td class="px-4 py-3 font-medium text-gray-800"><div class="flex items-center gap-2"><i class="fi fi-rr-building text-navy-500"></i> ' + escHtml(d.name) + '</div></td>';
     html += '<td class="px-4 py-3 text-sm text-gray-600">' + escHtml(d.description || '-') + '</td>';
-    html += '<td class="px-4 py-3 text-center"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">' + empCount + ' คน</span></td>';
+    html += '<td class="px-4 py-3 text-center"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">' + (d.employee_count || 0) + ' คน</span></td>';
     html += '<td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + (d.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700') + '">' + (d.active !== false ? 'ใช้งาน' : 'ระงับ') + '</span></td>';
     html += '<td class="px-4 py-3 text-center"><div class="flex gap-1 justify-center">';
     html += '<button onclick="openEditDeptModal(\'' + d.id + '\')" title="แก้ไข" class="w-7 h-7 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center hover:bg-blue-200"><i class="fi fi-rr-edit text-xs"></i></button>';
@@ -1067,10 +1066,7 @@ function submitDept(id) {
   }).catch(function (e) { hideLoading(); showError(e.message || 'บันทึกไม่สำเร็จ'); });
 }
 function doDeleteDept(id, name) {
-  var empCount = (_usersData || []).filter(function (u) { return u.department_id === id; }).length;
-  var warn = empCount > 0 ? '\n\n⚠️ มีพนักงาน ' + empCount + ' คนอยู่ในหน่วยงานนี้ กรุณาย้ายพนักงานออกก่อน' : '';
-  if (empCount > 0) { showError('ไม่สามารถลบได้ เนื่องจากมีพนักงาน ' + empCount + ' คนอยู่ในหน่วยงานนี้\nกรุณาย้ายพนักงานออกก่อนลบหน่วยงาน'); return; }
-  showConfirm('ยืนยันการลบ', 'ต้องการลบหน่วยงาน "' + name + '" ใช่หรือไม่?', function () {
+  showConfirm('ยืนยันการลบ', 'ต้องการลบหน่วยงาน "' + name + '" ใช่หรือไม่?\n(หากมีพนักงานอยู่ในหน่วยงาน ระบบจะไม่อนุญาตให้ลบ)', function () {
     showLoading('กำลังลบ...');
     callAPI('deleteDepartment', id).then(function (res) {
       hideLoading();
