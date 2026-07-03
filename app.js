@@ -369,6 +369,18 @@ function _ensureItems(force) {
 }
 
 // ===== DASHBOARD =====
+// ===== PENDING BADGE HELPER =====
+function _updatePendingBadge() {
+  if (!AUTH.hasRole('admin')) return;
+  callAPI('getDashboardStats').then(function (d) {
+    if (!d || !d.success || !d.kpi) return;
+    var badge = document.getElementById('pendingBadge');
+    if (!badge) return;
+    if (d.kpi.pending > 0) { badge.textContent = d.kpi.pending; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+  }).catch(function () {});
+}
+
 function renderDashboard() {
   showLoading('โหลดข้อมูล Dashboard...');
   Promise.all([callAPI('getDashboardStats'), _ensureItems()]).then(function (results) {
@@ -827,7 +839,7 @@ function submitWithdraw() {
 function doCancelWithdraw(id) {
   showConfirm('ยกเลิกคำขอเบิก', 'ต้องการยกเลิกคำขอนี้ใช่หรือไม่?', function () {
     showLoading('กำลังยกเลิก...');
-    callAPI('cancelWithdrawal', id).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); renderWithdraw(); } else showError(res.message); })
+    callAPI('cancelWithdrawal', id).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); _updatePendingBadge(); renderWithdraw(); } else showError(res.message); })
       .catch(function (e) { hideLoading(); showError(e.message); });
   }, 'ยกเลิก');
 }
@@ -861,7 +873,7 @@ function renderApprove() {
 function doApprove(id, qty) {
   showConfirm('อนุมัติการเบิก', 'ยืนยันการอนุมัติใช่หรือไม่?', function () {
     showLoading('กำลังอนุมัติ...');
-    callAPI('approveWithdrawal', id, qty).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); renderApprove(); } else showError(res.message); })
+    callAPI('approveWithdrawal', id, qty).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); _updatePendingBadge(); renderApprove(); } else showError(res.message); })
       .catch(function (e) { hideLoading(); showError(e.message); });
   }, 'อนุมัติ');
 }
@@ -870,7 +882,7 @@ function doReject(id) {
     .then(function (r) {
       if (r.isConfirmed) {
         showLoading('กำลังบันทึก...');
-        callAPI('rejectWithdrawal', id, r.value).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); renderApprove(); } else showError(res.message); })
+        callAPI('rejectWithdrawal', id, r.value).then(function (res) { hideLoading(); if (res.success) { showSuccess(res.message); _updatePendingBadge(); renderApprove(); } else showError(res.message); })
           .catch(function (e) { hideLoading(); showError(e.message); });
       }
     });
