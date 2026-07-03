@@ -36,6 +36,7 @@ var _usageData = [];
 var _receiveData = [];
 var _txData = [];
 var _usersData = [];
+var _deptsData = [];
 var _configData = null;
 var _currentPage = '';
 var _charts = {};
@@ -206,7 +207,7 @@ function updateClock() {
 function refreshPage() {
   var icon = document.getElementById('refreshIcon');
   if (icon) { icon.style.transition = 'transform 0.6s'; icon.style.transform = 'rotate(360deg)'; setTimeout(function () { icon.style.transform = ''; }, 650); }
-  _itemsData = []; _itemsCacheTime = 0; _wdData = []; _usageData = []; _receiveData = []; _txData = []; _usersData = [];
+  _itemsData = []; _itemsCacheTime = 0; _wdData = []; _usageData = []; _receiveData = []; _txData = []; _usersData = []; _deptsData = [];
   if (_currentPage) loadPage(_currentPage);
 }
 
@@ -297,7 +298,7 @@ function loadPage(page) {
   var titles = {
     dashboard: 'ภาพรวมระบบ', stock: 'สต็อกคงเหลือ', items: 'รายการวัสดุ',
     receive: 'รับวัสดุเข้าคลัง', stocktake: 'นับสต็อก', usage: 'บันทึกการใช้จริง', withdraw: 'เบิกวัสดุ', approve: 'อนุมัติการเบิก',
-    transactions: 'ประวัติเคลื่อนไหว', reports: 'รายงาน', users: 'จัดการผู้ใช้งาน', settings: 'ตั้งค่าระบบ', profile: 'โปรไฟล์'
+    transactions: 'ประวัติเคลื่อนไหว', reports: 'รายงาน', departments: 'จัดการหน่วยงาน', users: 'จัดการผู้ใช้งาน', settings: 'ตั้งค่าระบบ', profile: 'โปรไฟล์'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
   document.getElementById('pageBreadcrumb').textContent = 'ระบบวัสดุสิ้นเปลือง / ' + (titles[page] || page);
@@ -316,6 +317,7 @@ function loadPage(page) {
   else if (page === 'approve') renderApprove();
   else if (page === 'transactions') renderTransactions();
   else if (page === 'reports') renderReports();
+  else if (page === 'departments') renderDepartments();
   else if (page === 'users') renderUsers();
   else if (page === 'settings') renderSettings();
   else if (page === 'profile') renderProfile();
@@ -663,9 +665,9 @@ function submitReceive() {
 // ===== USAGE (บันทึกการใช้จริง) =====
 function renderUsage() {
   showLoading('โหลดข้อมูลการใช้จริง...');
-  Promise.all([_ensureItems(), callAPI('getUsages', {})]).then(function (results) {
+  Promise.all([_ensureItems(), _ensureDepts(), callAPI('getUsages', {})]).then(function (results) {
     hideLoading();
-    var usageRes = results[1];
+    var usageRes = results[2];
     if (!usageRes.success) { showError(usageRes.message); return; }
     _usageData = usageRes.data || [];
     var html = '<div class="fade-in space-y-4">';
@@ -681,8 +683,8 @@ function renderUsage() {
     html += '<div class="card p-4 text-center"><p class="text-xs text-gray-500">มูลค่ารวม</p><p class="text-2xl font-bold text-emerald-600 mt-1">' + _formatNumber(totalValue) + '</p><p class="text-xs text-gray-400">บาท</p></div>';
     html += '</div>';
 
-    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">เลขที่</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-right">มูลค่า</th><th class="px-4 py-3 text-left">ผู้บันทึก</th><th class="px-4 py-3 text-left">วัตถุประสงค์</th><th class="px-4 py-3 text-left">วันที่</th></tr></thead><tbody>';
-    if (!_usageData.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ยังไม่มีรายการใช้จริง</td></tr>';
+    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">เลขที่</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-right">มูลค่า</th><th class="px-4 py-3 text-left">ผู้บันทึก</th><th class="px-4 py-3 text-left">หน่วยงาน</th><th class="px-4 py-3 text-left">วัตถุประสงค์</th><th class="px-4 py-3 text-left">วันที่</th></tr></thead><tbody>';
+    if (!_usageData.length) html += '<tr><td colspan="8" class="text-center py-10 text-gray-400">ยังไม่มีรายการใช้จริง</td></tr>';
     _usageData.slice(0, 100).forEach(function (u) {
       var value = Number(u.price || 0) * Number(u.quantity || 0);
       html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(u.usage_no || '-') + '</td>';
@@ -690,6 +692,7 @@ function renderUsage() {
       html += '<td class="px-4 py-3 text-center font-bold text-purple-700">-' + u.quantity + '</td>';
       html += '<td class="px-4 py-3 text-right text-sm ' + (value > 0 ? 'text-gray-700' : 'text-gray-400') + '">' + (value > 0 ? _formatNumber(value) + ' บาท' : '-') + '</td>';
       html += '<td class="px-4 py-3 text-xs text-gray-600">' + escHtml(u.user_name || u.username) + '</td>';
+      html += '<td class="px-4 py-3 text-xs text-gray-600"><span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs">' + escHtml(u.department_name || u.department_id || '-') + '</span></td>';
       html += '<td class="px-4 py-3 text-xs text-gray-500">' + escHtml(u.purpose || '-') + '</td>';
       html += '<td class="px-4 py-3 text-xs text-gray-400">' + formatDateTime(u.created_at) + '</td></tr>';
     });
@@ -702,7 +705,8 @@ function openUsageModal() {
     var priceInfo = Number(i.price || 0) > 0 ? ' | ' + _formatNumber(i.price) + ' บาท/' + escHtml(i.unit) : '';
     return '<option value="' + i.id + '">' + escHtml(i.name) + ' (คงเหลือ ' + i.current_stock + ' ' + escHtml(i.unit) + priceInfo + ')</option>';
   }).join('');
-  var body = '<div class="space-y-4">'
+  var deptInfo = AUTH.user.department_id ? '<div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-700"><i class="fi fi-rr-building mr-1"></i> <strong>ใช้ในนามหน่วยงาน:</strong> ' + escHtml(AUTH.user.department_name || _deptName(AUTH.user.department_id)) + '</div>' : '';
+  var body = '<div class="space-y-4">' + deptInfo
     + '<div class="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-purple-700"><i class="fi fi-rr-info mr-1"></i> การบันทึกนี้จะตัดยอดสต็อกทันที โดยไม่ต้องรออนุมัติ</div>'
     + '<div><label class="form-label">วัสดุ *</label><select id="uItem" class="form-input" onchange="updateUsagePreview()"><option value="">เลือกวัสดุ</option>' + opts + '</select></div>'
     + '<div><label class="form-label">จำนวน *</label><input type="number" id="uQty" min="1" class="form-input" value="1" oninput="updateUsagePreview()"></div>'
@@ -732,7 +736,8 @@ function submitUsage() {
     item_id: (document.getElementById('uItem') || {}).value,
     quantity: parseInt((document.getElementById('uQty') || {}).value),
     purpose: (document.getElementById('uPurpose') || {}).value,
-    note: (document.getElementById('uNote') || {}).value
+    note: (document.getElementById('uNote') || {}).value,
+    department_id: AUTH.user.department_id || ''
   };
   if (!data.item_id || !data.quantity || data.quantity <= 0) { showError('กรุณาเลือกวัสดุและใส่จำนวน'); return; }
   showLoading('กำลังบันทึกการใช้จริง...');
@@ -779,18 +784,18 @@ function submitStocktake(id) {
 // ===== WITHDRAW =====
 function renderWithdraw() {
   showLoading('โหลดข้อมูล...');
-  Promise.all([_ensureItems(), callAPI('getWithdrawals', { status: 'all' })]).then(function (results) {
+  Promise.all([_ensureItems(), _ensureDepts(), callAPI('getWithdrawals', { status: 'all' })]).then(function (results) {
     hideLoading();
-    var wdRes = results[1];
+    var wdRes = results[2];
     _wdData = wdRes.data || [];
     var mine = _wdData.filter(function (w) { return w.requester_id === AUTH.user.id || AUTH.hasRole('admin'); });
     var html = '<div class="fade-in space-y-4">';
     html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-inbox-out text-navy-600"></i> เบิกวัสดุ</h3><button onclick="openWithdrawModal()" class="btn-primary"><i class="fi fi-rr-plus"></i> เบิกวัสดุ</button></div>';
-    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">เลขที่</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-left">วันที่</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
-    if (!mine.length) html += '<tr><td colspan="6" class="text-center py-10 text-gray-400">ยังไม่มีคำขอเบิก</td></tr>';
+    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">เลขที่</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-left">หน่วยงาน</th><th class="px-4 py-3 text-left">วันที่</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
+    if (!mine.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ยังไม่มีคำขอเบิก</td></tr>';
     mine.slice(0, 50).forEach(function (w) {
       var stCls = 'status-' + w.status; var stTxt = { pending: 'รออนุมัติ', approved: 'อนุมัติแล้ว', rejected: 'ปฏิเสธ', cancelled: 'ยกเลิก' }[w.status] || w.status;
-      html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(w.withdraw_no) + '</td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(w.item_name || w.item_id) + '</td><td class="px-4 py-3 text-center font-bold text-gray-800">' + w.quantity + '</td><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(w.created_at) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + stCls + '">' + stTxt + '</span></td>';
+      html += '<tr><td class="px-4 py-3 font-mono text-xs text-navy-700">' + escHtml(w.withdraw_no) + '</td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(w.item_name || w.item_id) + '</td><td class="px-4 py-3 text-center font-bold text-gray-800">' + w.quantity + '</td><td class="px-4 py-3 text-xs text-gray-600">' + escHtml(w.department_name || w.department_id || '-') + '</td><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(w.created_at) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + stCls + '">' + stTxt + '</span></td>';
       html += '<td class="px-4 py-3 text-center">';
       if (w.status === 'pending') html += '<button onclick="doCancelWithdraw(\'' + w.id + '\')" class="btn-secondary btn-sm"><i class="fi fi-rr-times"></i> ยกเลิก</button>';
       else if (w.reject_reason) html += '<button onclick="Swal.fire({icon:\'info\',title:\'เหตุผลที่ปฏิเสธ\',text:\'' + escHtml(w.reject_reason).replace(/'/g, "\\'") + '\'})" class="btn-secondary btn-sm"><i class="fi fi-rr-info"></i></button>';
@@ -803,7 +808,9 @@ function renderWithdraw() {
 }
 function openWithdrawModal() {
   var opts = _itemsData.filter(function (i) { return i.current_stock > 0; }).map(function (i) { return '<option value="' + i.id + '">' + escHtml(i.name) + ' (คงเหลือ ' + i.current_stock + ' ' + escHtml(i.unit) + ')</option>'; }).join('');
-  var body = '<div class="space-y-4"><div><label class="form-label">วัสดุ *</label><select id="wItem" class="form-input"><option value="">เลือกวัสดุ</option>' + opts + '</select></div>'
+  var deptInfo = AUTH.user.department_id ? '<div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-700"><i class="fi fi-rr-building mr-1"></i> <strong>เบิกในนามหน่วยงาน:</strong> ' + escHtml(AUTH.user.department_name || _deptName(AUTH.user.department_id)) + '</div>' : '';
+  var body = '<div class="space-y-4">' + deptInfo
+    + '<div><label class="form-label">วัสดุ *</label><select id="wItem" class="form-input"><option value="">เลือกวัสดุ</option>' + opts + '</select></div>'
     + '<div><label class="form-label">จำนวน *</label><input type="number" id="wQty" min="1" class="form-input" value="1"></div>'
     + '<div><label class="form-label">วัตถุประสงค์</label><input type="text" id="wPurpose" class="form-input" placeholder="เช่น ใช้ในงาน..."></div>'
     + '<div><label class="form-label">หมายเหตุ</label><textarea id="wNote" class="form-input" rows="2"></textarea></div></div>';
@@ -811,7 +818,7 @@ function openWithdrawModal() {
   openModal('เบิกวัสดุ', body, footer);
 }
 function submitWithdraw() {
-  var data = { item_id: (document.getElementById('wItem') || {}).value, quantity: parseInt((document.getElementById('wQty') || {}).value), purpose: (document.getElementById('wPurpose') || {}).value, note: (document.getElementById('wNote') || {}).value, via_qr: false };
+  var data = { item_id: (document.getElementById('wItem') || {}).value, quantity: parseInt((document.getElementById('wQty') || {}).value), purpose: (document.getElementById('wPurpose') || {}).value, note: (document.getElementById('wNote') || {}).value, via_qr: false, department_id: AUTH.user.department_id || '' };
   if (!data.item_id || !data.quantity) { showError('กรุณาเลือกวัสดุและใส่จำนวน'); return; }
   showLoading('กำลังส่งคำขอ...');
   callAPI('addWithdrawal', data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); renderWithdraw(); } else showError(res.message); })
@@ -828,8 +835,9 @@ function doCancelWithdraw(id) {
 // ===== APPROVE =====
 function renderApprove() {
   showLoading('โหลดคำขอเบิก...');
-  callAPI('getWithdrawals', { status: 'all' }).then(function (res) {
+  Promise.all([_ensureDepts(), callAPI('getWithdrawals', { status: 'all' })]).then(function (results) {
     hideLoading();
+    var res = results[1];
     if (!res.success) { showError(res.message); return; }
     var all = res.data || [];
     var pending = all.filter(function (w) { return w.status === 'pending'; });
@@ -837,7 +845,12 @@ function renderApprove() {
     html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-check-circle text-navy-600"></i> อนุมัติการเบิก <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs">' + pending.length + ' รออนุมัติ</span></h3></div>';
     if (!pending.length) html += '<div class="card p-10 text-center text-gray-400"><i class="fi fi-rr-check text-4xl mb-2 block"></i>ไม่มีคำขอรออนุมัติ</div>';
     pending.forEach(function (w) {
-      html += '<div class="card p-4 flex items-center gap-4 flex-wrap"><div class="flex-1 min-w-[200px]"><p class="font-semibold text-gray-800">' + escHtml(w.item_name) + '</p><p class="text-xs text-gray-400">' + escHtml(w.withdraw_no) + ' • ' + escHtml(w.requester_name) + ' • ' + formatDateTime(w.created_at) + '</p>' + (w.purpose ? '<p class="text-xs text-gray-500 mt-1">วัตถุประสงค์: ' + escHtml(w.purpose) + '</p>' : '') + '</div>';
+      html += '<div class="card p-4 flex items-center gap-4 flex-wrap">';
+      html += '<div class="flex-1 min-w-[200px]"><p class="font-semibold text-gray-800">' + escHtml(w.item_name) + '</p>';
+      html += '<p class="text-xs text-gray-400">' + escHtml(w.withdraw_no) + ' • ' + escHtml(w.requester_name) + ' • ' + formatDateTime(w.created_at) + '</p>';
+      if (w.department_name || w.department_id) html += '<p class="text-xs text-indigo-600 mt-0.5"><i class="fi fi-rr-building mr-1"></i>' + escHtml(w.department_name || w.department_id) + '</p>';
+      if (w.purpose) html += '<p class="text-xs text-gray-500 mt-0.5">วัตถุประสงค์: ' + escHtml(w.purpose) + '</p>';
+      html += '</div>';
       html += '<div class="text-center"><p class="text-2xl font-bold text-navy-700">' + w.quantity + '</p><p class="text-xs text-gray-400">' + escHtml(w.unit || '') + '</p></div>';
       html += '<div class="flex gap-2"><button onclick="doApprove(\'' + w.id + '\',' + w.quantity + ')" class="btn-primary btn-sm"><i class="fi fi-rr-check"></i> อนุมัติ</button><button onclick="doReject(\'' + w.id + '\')" class="btn-danger btn-sm"><i class="fi fi-rr-times"></i> ปฏิเสธ</button></div></div>';
     });
@@ -864,20 +877,39 @@ function doReject(id) {
 }
 
 // ===== TRANSACTIONS =====
+var _txFilter = { dept: 'all' };
 function renderTransactions() {
   showLoading('โหลดประวัติ...');
-  callAPI('getTransactions', {}).then(function (res) {
+  Promise.all([_ensureDepts(), callAPI('getTransactions', {})]).then(function (results) {
     hideLoading();
+    var res = results[1];
     if (!res.success) { showError(res.message); return; }
     var txs = res.data || [];
+
+    // Filter
+    var filtered = txs;
+    if (_txFilter.dept !== 'all') {
+      filtered = txs.filter(function (t) { return t.department_id === _txFilter.dept; });
+    }
+
     var html = '<div class="fade-in space-y-4">';
-    html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-time-past text-navy-600"></i> ประวัติเคลื่อนไหว (' + txs.length + ')</h3></div>';
-    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">วันที่</th><th class="px-4 py-3 text-left">ประเภท</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-left">โดย</th><th class="px-4 py-3 text-left">หมายเหตุ</th></tr></thead><tbody>';
-    if (!txs.length) html += '<tr><td colspan="6" class="text-center py-10 text-gray-400">ยังไม่มีประวัติ</td></tr>';
-    txs.slice(0, 100).forEach(function (t) {
+    html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-time-past text-navy-600"></i> ประวัติเคลื่อนไหว (' + filtered.length + '/' + txs.length + ')</h3></div>';
+
+    // Department filter
+    if (_deptsData.length) {
+      html += '<div class="card p-3 flex flex-wrap gap-3 items-end">';
+      html += '<div><label class="form-label">กรองตามหน่วยงาน</label><select id="txDeptFilter" onchange="_txFilter.dept=this.value;renderTransactions()" class="form-input"><option value="all">ทุกหน่วยงาน</option>';
+      _deptsData.forEach(function (d) { html += '<option value="' + d.id + '"' + (_txFilter.dept === d.id ? ' selected' : '') + '>' + escHtml(d.name) + '</option>'; });
+      html += '</select></div></div>';
+    }
+
+    html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">วันที่</th><th class="px-4 py-3 text-left">ประเภท</th><th class="px-4 py-3 text-left">วัสดุ</th><th class="px-4 py-3 text-center">จำนวน</th><th class="px-4 py-3 text-left">โดย</th><th class="px-4 py-3 text-left">หน่วยงาน</th><th class="px-4 py-3 text-left">หมายเหตุ</th></tr></thead><tbody>';
+    if (!filtered.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ยังไม่มีประวัติ</td></tr>';
+    filtered.slice(0, 100).forEach(function (t) {
       var typeMap = { receive: ['รับเข้า', 'text-green-700', 'fi-rr-inbox-in'], withdraw: ['เบิกออก', 'text-red-700', 'fi-rr-inbox-out'], usage: ['ใช้จริง', 'text-purple-700', 'fi-rr-arrow-right-from-bracket'], withdraw_request: ['ขอเบิก', 'text-amber-700', 'fi-rr-clock'], create: ['สร้าง', 'text-blue-700', 'fi-rr-plus'], stocktake: ['นับสต็อก', 'text-indigo-700', 'fi-rr-clipboard-list'] };
       var tp = typeMap[t.type] || [t.type, 'text-gray-700', 'fi-rr-dot-circle'];
-      html += '<tr><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(t.created_at) + '</td><td class="px-4 py-3"><span class="' + tp[1] + ' text-xs font-medium"><i class="fi ' + tp[2] + ' mr-1"></i>' + tp[0] + '</span></td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(t.item_name) + '</td><td class="px-4 py-3 text-center font-bold ' + tp[1] + '">' + (t.quantity > 0 ? (t.type === 'receive' ? '+' : (t.type === 'withdraw' || t.type === 'usage' ? '-' : '')) + t.quantity : '-') + '</td><td class="px-4 py-3 text-xs text-gray-600">' + escHtml(t.username) + '</td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(t.note || '-') + '</td></tr>';
+      var deptCell = (t.department_name || t.department_id) ? '<td class="px-4 py-3 text-xs text-gray-600"><span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs">' + escHtml(t.department_name || t.department_id) + '</span></td>' : '<td class="px-4 py-3 text-xs text-gray-400">-</td>';
+      html += '<tr><td class="px-4 py-3 text-xs text-gray-500">' + formatDateTime(t.created_at) + '</td><td class="px-4 py-3"><span class="' + tp[1] + ' text-xs font-medium"><i class="fi ' + tp[2] + ' mr-1"></i>' + tp[0] + '</span></td><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(t.item_name) + '</td><td class="px-4 py-3 text-center font-bold ' + tp[1] + '">' + (t.quantity > 0 ? (t.type === 'receive' ? '+' : (t.type === 'withdraw' || t.type === 'usage' ? '-' : '')) + t.quantity : '-') + '</td><td class="px-4 py-3 text-xs text-gray-600">' + escHtml(t.username) + '</td>' + deptCell + '<td class="px-4 py-3 text-xs text-gray-500">' + escHtml(t.note || '-') + '</td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     document.getElementById('mainContent').innerHTML = html;
@@ -885,22 +917,57 @@ function renderTransactions() {
 }
 
 // ===== REPORTS =====
+var _rptFilter = { dept: 'all' };
 function renderReports() {
   showLoading('โหลดรายงาน...');
-  Promise.all([_ensureItems(), callAPI('getWithdrawals', { status: 'all' }), callAPI('getReceives', {})]).then(function (results) {
+  Promise.all([_ensureItems(), _ensureDepts(), callAPI('getWithdrawals', { status: 'all' }), callAPI('getReceives', {})]).then(function (results) {
     hideLoading();
-    var wds = (results[1].data || []).filter(function (w) { return w.status === 'approved'; });
-    var recs = results[2].data || [];
-    var totalIn = recs.reduce(function (s, r) { return s + Number(r.quantity || 0); }, 0);
-    var totalOut = wds.reduce(function (s, w) { return s + Number(w.quantity || 0); }, 0);
+    var wds = (results[2].data || []).filter(function (w) { return w.status === 'approved'; });
+    var recs = results[3].data || [];
+
+    // Filter by department
+    var filteredWds = wds;
+    if (_rptFilter.dept !== 'all') {
+      filteredWds = wds.filter(function (w) { return w.department_id === _rptFilter.dept; });
+    }
+    var filteredRecs = recs;
+
+    var totalIn = filteredRecs.reduce(function (s, r) { return s + Number(r.quantity || 0); }, 0);
+    var totalOut = filteredWds.reduce(function (s, w) { return s + Number(w.quantity || 0); }, 0);
     var totalStockValue = _itemsData.reduce(function (s, i) { return s + (Number(i.price || 0) * Number(i.current_stock || 0)); }, 0);
     var html = '<div class="fade-in space-y-4">';
+
+    // Department filter
+    if (_deptsData.length) {
+      html += '<div class="card p-3 flex flex-wrap gap-3 items-end">';
+      html += '<div><label class="form-label">กรองรายงานตามหน่วยงาน</label><select id="rptDeptFilter" onchange="_rptFilter.dept=this.value;renderReports()" class="form-input"><option value="all">ทุกหน่วยงาน</option>';
+      _deptsData.forEach(function (d) { html += '<option value="' + d.id + '"' + (_rptFilter.dept === d.id ? ' selected' : '') + '>' + escHtml(d.name) + '</option>'; });
+      html += '</select></div></div>';
+    }
+
     html += '<div class="grid grid-cols-1 md:grid-cols-4 gap-4">';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-inbox-in text-3xl text-green-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + totalIn + '</p><p class="text-xs text-gray-500">รับเข้ารวม</p></div>';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-inbox-out text-3xl text-red-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + totalOut + '</p><p class="text-xs text-gray-500">เบิกออกรวม</p></div>';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-layers text-3xl text-navy-600"></i><p class="text-2xl font-bold text-gray-800 mt-2">' + _itemsData.reduce(function (s, i) { return s + Number(i.current_stock || 0); }, 0) + '</p><p class="text-xs text-gray-500">สต็อกปัจจุบัน</p></div>';
     html += '<div class="card p-5 text-center"><i class="fi fi-rr-money text-3xl text-emerald-600"></i><p class="text-2xl font-bold text-emerald-700 mt-2">' + _formatNumber(totalStockValue) + '</p><p class="text-xs text-gray-500">มูลค่าสต็อกรวม (บาท)</p></div>';
     html += '</div>';
+
+    // Withdrawal detail by department
+    if (_rptFilter.dept !== 'all') {
+      var deptName = _deptName(_rptFilter.dept);
+      html += '<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-gray-700"><i class="fi fi-rr-building text-indigo-500 mr-1"></i> รายการเบิกของ ' + escHtml(deptName) + '</h3></div>';
+      if (filteredWds.length) {
+        html += '<div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-3 py-2 text-left">เลขที่</th><th class="px-3 py-2 text-left">วัสดุ</th><th class="px-3 py-2 text-center">จำนวน</th><th class="px-3 py-2 text-left">ผู้เบิก</th><th class="px-3 py-2 text-left">วันที่</th></tr></thead><tbody>';
+        filteredWds.forEach(function (w) {
+          html += '<tr><td class="px-3 py-2 text-xs font-mono">' + escHtml(w.withdraw_no || '-') + '</td><td class="px-3 py-2">' + escHtml(w.item_name || '-') + '</td><td class="px-3 py-2 text-center font-bold">' + w.quantity + '</td><td class="px-3 py-2 text-xs">' + escHtml(w.requester_name || '-') + '</td><td class="px-3 py-2 text-xs">' + formatDateTime(w.created_at) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      } else {
+        html += '<p class="text-sm text-gray-400 text-center py-6">ไม่มีรายการเบิกสำหรับหน่วยงานนี้</p>';
+      }
+      html += '</div>';
+    }
+
     html += '<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-gray-700">รายงานสต็อกคงเหลือ</h3><button onclick="exportItemsExcel()" class="btn-secondary btn-sm"><i class="fi fi-rr-file-export"></i> Export Excel</button></div>';
     html += '<div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-3 py-2 text-left">รหัส</th><th class="px-3 py-2 text-left">ชื่อ</th><th class="px-3 py-2 text-right">ราคา/หน่วย</th><th class="px-3 py-2 text-center">คงเหลือ</th><th class="px-3 py-2 text-right">มูลค่ารวม</th><th class="px-3 py-2 text-center">ขั้นต่ำ</th><th class="px-3 py-2 text-center">สถานะ</th></tr></thead><tbody>';
     _itemsData.forEach(function (i) {
@@ -920,12 +987,106 @@ function exportItemsExcel() {
   XLSX.writeFile(wb, 'รายงานสต็อก_' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 
+// ===== HELPER: load departments with cache =====
+function _ensureDepts() {
+  if (_deptsData.length) return Promise.resolve({ success: true, data: _deptsData });
+  return callAPI('getDepartments').then(function (res) {
+    if (res.success) _deptsData = res.data || [];
+    return res;
+  });
+}
+function _deptName(deptId) {
+  if (!deptId) return '-';
+  var d = _deptsData.filter(function (x) { return x.id === deptId; })[0];
+  return d ? d.name : deptId;
+}
+function _deptOpts(selectedId) {
+  return _deptsData.map(function (d) {
+    return '<option value="' + d.id + '"' + (d.id === selectedId ? ' selected' : '') + '>' + escHtml(d.name) + '</option>';
+  }).join('');
+}
+
+// ===== DEPARTMENTS =====
+var _deptsPage = 1;
+function renderDepartments() {
+  showLoading('โหลดหน่วยงาน...');
+  callAPI('getDepartments').then(function (res) {
+    hideLoading();
+    if (!res.success) { showError(res.message); return; }
+    _deptsData = res.data || [];
+    buildDepartmentsPage();
+  }).catch(function (e) { hideLoading(); showError(e.message); });
+}
+function buildDepartmentsPage() {
+  var paged = paginate(_deptsData, _deptsPage);
+  var html = '<div class="fade-in space-y-4">';
+  html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-building text-navy-600"></i> หน่วยงาน (' + _deptsData.length + ')</h3>';
+  if (AUTH.hasRole('admin')) html += '<button onclick="openAddDeptModal()" class="btn-primary"><i class="fi fi-rr-building"></i> เพิ่มหน่วยงาน</button>';
+  html += '</div>';
+  html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">ชื่อหน่วยงาน</th><th class="px-4 py-3 text-left">รายละเอียด</th><th class="px-4 py-3 text-center">จำนวนพนักงาน</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
+  if (!paged.length) html += '<tr><td colspan="5" class="text-center py-10 text-gray-400">ยังไม่มีหน่วยงาน</td></tr>';
+  paged.forEach(function (d) {
+    var empCount = (_usersData || []).filter(function (u) { return u.department_id === d.id; }).length;
+    html += '<tr>';
+    html += '<td class="px-4 py-3 font-medium text-gray-800"><div class="flex items-center gap-2"><i class="fi fi-rr-building text-navy-500"></i> ' + escHtml(d.name) + '</div></td>';
+    html += '<td class="px-4 py-3 text-sm text-gray-600">' + escHtml(d.description || '-') + '</td>';
+    html += '<td class="px-4 py-3 text-center"><span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">' + empCount + ' คน</span></td>';
+    html += '<td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + (d.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700') + '">' + (d.active !== false ? 'ใช้งาน' : 'ระงับ') + '</span></td>';
+    html += '<td class="px-4 py-3 text-center"><div class="flex gap-1 justify-center">';
+    html += '<button onclick="openEditDeptModal(\'' + d.id + '\')" title="แก้ไข" class="w-7 h-7 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center hover:bg-blue-200"><i class="fi fi-rr-edit text-xs"></i></button>';
+    html += '<button onclick="doDeleteDept(\'' + d.id + '\',\'' + escHtml(d.name).replace(/'/g, "\\'") + '\')" title="ลบ" class="w-7 h-7 bg-red-100 text-red-700 rounded-lg flex items-center justify-center hover:bg-red-200"><i class="fi fi-rr-trash text-xs"></i></button>';
+    html += '</div></td></tr>';
+  });
+  html += '</tbody></table></div><div id="deptsPagination"></div></div>';
+  document.getElementById('mainContent').innerHTML = html;
+  _renderPagination('deptsPagination', _deptsData.length, _deptsPage, function (p) { _deptsPage = p; buildDepartmentsPage(); });
+}
+function openAddDeptModal() { _openDeptForm(null); }
+function openEditDeptModal(id) { var d = _deptsData.filter(function (x) { return x.id === id; })[0]; if (d) _openDeptForm(d); }
+function _openDeptForm(dept) {
+  dept = dept || {};
+  var body = '<div class="grid grid-cols-1 gap-4">'
+    + '<div><label class="form-label">ชื่อหน่วยงาน *</label><input type="text" id="dName" class="form-input" value="' + escHtml(dept.name || '') + '" placeholder="เช่น แผนกซ่อมบำรุง"></div>'
+    + '<div><label class="form-label">รายละเอียด</label><textarea id="dDesc" class="form-input" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)">' + escHtml(dept.description || '') + '</textarea></div>'
+    + '</div>';
+  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button><button onclick="submitDept(' + (dept.id ? '\'' + dept.id + '\'' : 'null') + ')" class="btn-primary"><i class="fi fi-rr-disk mr-1"></i>บันทึก</button>';
+  openModal(dept.id ? 'แก้ไขหน่วยงาน' : 'เพิ่มหน่วยงาน', body, footer);
+}
+function submitDept(id) {
+  var data = {
+    name: (document.getElementById('dName') || {}).value || '',
+    description: (document.getElementById('dDesc') || {}).value || ''
+  };
+  if (!data.name) { showError('กรุณากรอกชื่อหน่วยงาน'); return; }
+  showLoading('กำลังบันทึก...');
+  var api = id ? callAPI('updateDepartment', id, data) : callAPI('addDepartment', data);
+  api.then(function (res) {
+    hideLoading();
+    if (res.success) { closeModal(); showSuccess(res.message); _deptsData = []; renderDepartments(); }
+    else showError(res.message);
+  }).catch(function (e) { hideLoading(); showError(e.message || 'บันทึกไม่สำเร็จ'); });
+}
+function doDeleteDept(id, name) {
+  var empCount = (_usersData || []).filter(function (u) { return u.department_id === id; }).length;
+  var warn = empCount > 0 ? '\n\n⚠️ มีพนักงาน ' + empCount + ' คนอยู่ในหน่วยงานนี้ กรุณาย้ายพนักงานออกก่อน' : '';
+  if (empCount > 0) { showError('ไม่สามารถลบได้ เนื่องจากมีพนักงาน ' + empCount + ' คนอยู่ในหน่วยงานนี้\nกรุณาย้ายพนักงานออกก่อนลบหน่วยงาน'); return; }
+  showConfirm('ยืนยันการลบ', 'ต้องการลบหน่วยงาน "' + name + '" ใช่หรือไม่?', function () {
+    showLoading('กำลังลบ...');
+    callAPI('deleteDepartment', id).then(function (res) {
+      hideLoading();
+      if (res.success) { showSuccess(res.message); _deptsData = []; renderDepartments(); }
+      else showError(res.message);
+    }).catch(function (e) { hideLoading(); showError(e.message); });
+  }, 'ลบ');
+}
+
 // ===== USERS =====
 var _usersPage = 1;
 function renderUsers() {
   showLoading('โหลดผู้ใช้...');
-  callAPI('getUsers').then(function (res) {
+  Promise.all([callAPI('getUsers'), _ensureDepts()]).then(function (results) {
     hideLoading();
+    var res = results[0];
     if (!res.success) { showError(res.message); return; }
     _usersData = res.data || [];
     buildUsersPage();
@@ -935,11 +1096,11 @@ function buildUsersPage() {
   var paged = paginate(_usersData, _usersPage);
   var html = '<div class="fade-in space-y-4">';
   html += '<div class="flex items-center justify-between"><h3 class="font-semibold text-gray-700 flex items-center gap-2"><i class="fi fi-rr-users text-navy-600"></i> ผู้ใช้งาน (' + _usersData.length + ')</h3><button onclick="openAddUserModal()" class="btn-primary"><i class="fi fi-rr-user-add"></i> เพิ่มผู้ใช้</button></div>';
-  html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">ชื่อ</th><th class="px-4 py-3 text-left">Username</th><th class="px-4 py-3 text-left">บทบาท</th><th class="px-4 py-3 text-left">อีเมล</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
-  if (!paged.length) html += '<tr><td colspan="6" class="text-center py-10 text-gray-400">ไม่มีผู้ใช้</td></tr>';
+  html += '<div class="card overflow-hidden"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th class="px-4 py-3 text-left">ชื่อ</th><th class="px-4 py-3 text-left">Username</th><th class="px-4 py-3 text-left">บทบาท</th><th class="px-4 py-3 text-left">หน่วยงาน</th><th class="px-4 py-3 text-left">อีเมล</th><th class="px-4 py-3 text-center">สถานะ</th><th class="px-4 py-3 text-center">จัดการ</th></tr></thead><tbody>';
+  if (!paged.length) html += '<tr><td colspan="7" class="text-center py-10 text-gray-400">ไม่มีผู้ใช้</td></tr>';
   paged.forEach(function (u) {
     var roleColor = u.role === 'admin' ? 'bg-navy-100 text-navy-700' : u.role === 'staff' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700';
-    html += '<tr><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(u.name) + '</td><td class="px-4 py-3 font-mono text-xs text-gray-500">@' + escHtml(u.username) + '</td><td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + roleColor + '">' + (ROLE_LABELS[u.role] || u.role) + '</span></td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(u.email || '-') + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + (u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700') + '">' + (u.active ? 'ใช้งาน' : 'ระงับ') + '</span></td>';
+    html += '<tr><td class="px-4 py-3 font-medium text-gray-800">' + escHtml(u.name) + '</td><td class="px-4 py-3 font-mono text-xs text-gray-500">@' + escHtml(u.username) + '</td><td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ' + roleColor + '">' + (ROLE_LABELS[u.role] || u.role) + '</span></td><td class="px-4 py-3 text-xs text-gray-600">' + (u.role === 'employee' ? '<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium">' + escHtml(_deptName(u.department_id)) + '</span>' : '<span class="text-gray-400">-</span>') + '</td><td class="px-4 py-3 text-xs text-gray-500">' + escHtml(u.email || '-') + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs ' + (u.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700') + '">' + (u.active ? 'ใช้งาน' : 'ระงับ') + '</span></td>';
     html += '<td class="px-4 py-3 text-center"><div class="flex gap-1 justify-center">';
     html += '<button onclick="openEditUserModal(\'' + u.id + '\')" title="แก้ไข" class="w-7 h-7 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center hover:bg-blue-200"><i class="fi fi-rr-edit text-xs"></i></button>';
     html += '<button onclick="doResetPassword(\'' + u.id + '\')" title="Reset Password" class="w-7 h-7 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center hover:bg-amber-200"><i class="fi fi-rr-lock text-xs"></i></button>';
@@ -951,38 +1112,55 @@ function buildUsersPage() {
   _renderPagination('usersPagination', _usersData.length, _usersPage, function (p) { _usersPage = p; buildUsersPage(); });
 }
 function openAddUserModal() {
+  _ensureDepts().then(function () { _buildAddUserModal(); });
+}
+function _buildAddUserModal() {
+  var deptSelect = '<div class="sm:col-span-2" id="uDeptWrap"><label class="form-label">หน่วยงาน (สำหรับพนักงาน)</label><select id="uDept" class="form-input"><option value="">-- เลือกหน่วยงาน --</option>' + _deptOpts('') + '</select></div>';
   var body = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">'
     + fieldHTML('ชื่อ-นามสกุล *', 'uName', 'text', '', 'sm:col-span-2')
     + fieldHTML('Username *', 'uUsername', 'text', '')
     + '<div class="sm:col-span-2"><label class="form-label">Password * (อย่างน้อย 8 ตัว มีตัวอักษร+ตัวเลข)</label><input type="password" id="uPassword" class="form-input" placeholder="รหัสผ่าน"></div>'
     + fieldHTML('อีเมล', 'uEmail', 'email', '')
     + fieldHTML('เบอร์โทร', 'uPhone', 'text', '')
-    + '<div class="sm:col-span-2"><label class="form-label">บทบาท *</label><select id="uRole" class="form-input"><option value="employee">พนักงาน</option><option value="staff">เจ้าหน้าที่คลัง</option><option value="admin">ผู้ดูแลระบบ</option></select></div></div>';
+    + '<div class="sm:col-span-2"><label class="form-label">บทบาท *</label><select id="uRole" class="form-input" onchange="toggleDeptField()"><option value="employee">พนักงาน</option><option value="staff">เจ้าหน้าที่คลัง</option><option value="admin">ผู้ดูแลระบบ</option></select></div>'
+    + deptSelect + '</div>';
   var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button><button onclick="submitAddUser()" class="btn-primary"><i class="fi fi-rr-user-add mr-1"></i>เพิ่ม</button>';
   openModal('เพิ่มผู้ใช้งาน', body, footer);
 }
 function openEditUserModal(id) {
   var u = _usersData.filter(function (x) { return x.id === id; })[0]; if (!u) return;
+  _ensureDepts().then(function () { _buildEditUserModal(u); });
+}
+function _buildEditUserModal(u) {
+  var deptSelect = '<div class="sm:col-span-2" id="uDeptWrap" style="' + (u.role === 'employee' ? '' : 'display:none') + '"><label class="form-label">หน่วยงาน</label><select id="uDept" class="form-input"><option value="">-- เลือกหน่วยงาน --</option>' + _deptOpts(u.department_id || '') + '</select></div>';
   var body = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">'
     + fieldHTML('ชื่อ-นามสกุล *', 'uName', 'text', u.name, 'sm:col-span-2')
     + fieldHTML('Username', 'uUsername', 'text', u.username)
     + fieldHTML('อีเมล', 'uEmail', 'email', u.email)
     + fieldHTML('เบอร์โทร', 'uPhone', 'text', u.phone)
-    + '<div class="sm:col-span-2"><label class="form-label">บทบาท</label><select id="uRole" class="form-input"><option value="employee"' + (u.role === 'employee' ? ' selected' : '') + '>พนักงาน</option><option value="staff"' + (u.role === 'staff' ? ' selected' : '') + '>เจ้าหน้าที่คลัง</option><option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>ผู้ดูแลระบบ</option></select></div></div>';
-  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button><button onclick="submitEditUser(\'' + id + '\')" class="btn-primary"><i class="fi fi-rr-disk mr-1"></i>บันทึก</button>';
+    + '<div class="sm:col-span-2"><label class="form-label">บทบาท</label><select id="uRole" class="form-input" onchange="toggleDeptField()"><option value="employee"' + (u.role === 'employee' ? ' selected' : '') + '>พนักงาน</option><option value="staff"' + (u.role === 'staff' ? ' selected' : '') + '>เจ้าหน้าที่คลัง</option><option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>ผู้ดูแลระบบ</option></select></div>'
+    + deptSelect + '</div>';
+  var footer = '<button onclick="closeModal()" class="btn-secondary">ยกเลิก</button><button onclick="submitEditUser(\'' + u.id + '\')" class="btn-primary"><i class="fi fi-rr-disk mr-1"></i>บันทึก</button>';
   openModal('แก้ไขผู้ใช้งาน', body, footer);
 }
+function toggleDeptField() {
+  var role = (document.getElementById('uRole') || {}).value;
+  var wrap = document.getElementById('uDeptWrap');
+  if (wrap) wrap.style.display = (role === 'employee') ? '' : 'none';
+}
 function submitAddUser() {
-  var data = { name: (document.getElementById('uName') || {}).value, username: (document.getElementById('uUsername') || {}).value, password: (document.getElementById('uPassword') || {}).value, email: (document.getElementById('uEmail') || {}).value, phone: (document.getElementById('uPhone') || {}).value, role: (document.getElementById('uRole') || {}).value };
+  var data = { name: (document.getElementById('uName') || {}).value, username: (document.getElementById('uUsername') || {}).value, password: (document.getElementById('uPassword') || {}).value, email: (document.getElementById('uEmail') || {}).value, phone: (document.getElementById('uPhone') || {}).value, role: (document.getElementById('uRole') || {}).value, department_id: (document.getElementById('uDept') || {}).value || '' };
   if (!data.name || !data.username || !data.password) { showError('กรุณากรอกข้อมูลให้ครบ'); return; }
+  if (data.role === 'employee' && !data.department_id) { showError('กรุณาเลือกหน่วยงานสำหรับพนักงาน'); return; }
   showLoading('กำลังเพิ่ม...');
-  callAPI('addUser', data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); renderUsers(); } else showError(res.message); })
+  callAPI('addUser', data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); _usersData = []; renderUsers(); } else showError(res.message); })
     .catch(function (e) { hideLoading(); showError(e.message); });
 }
 function submitEditUser(id) {
-  var data = { name: (document.getElementById('uName') || {}).value, email: (document.getElementById('uEmail') || {}).value, phone: (document.getElementById('uPhone') || {}).value, role: (document.getElementById('uRole') || {}).value };
+  var data = { name: (document.getElementById('uName') || {}).value, email: (document.getElementById('uEmail') || {}).value, phone: (document.getElementById('uPhone') || {}).value, role: (document.getElementById('uRole') || {}).value, department_id: (document.getElementById('uDept') || {}).value || '' };
+  if (data.role === 'employee' && !data.department_id) { showError('กรุณาเลือกหน่วยงานสำหรับพนักงาน'); return; }
   showLoading('กำลังบันทึก...');
-  callAPI('updateUser', id, data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); renderUsers(); } else showError(res.message); })
+  callAPI('updateUser', id, data).then(function (res) { hideLoading(); if (res.success) { closeModal(); showSuccess(res.message); _usersData = []; renderUsers(); } else showError(res.message); })
     .catch(function (e) { hideLoading(); showError(e.message); });
 }
 function doResetPassword(id) {
